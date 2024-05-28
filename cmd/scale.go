@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// scaleCmd represents the scale command
 var scaleCmd = &cobra.Command{
 	Use:   "scale",
 	Short: "Upscales or downscales an image",
@@ -32,10 +31,22 @@ func scaleRun(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	value := args[1]
-	fmt.Printf("mosaic: value: %s\n", value)
-	var newX, newY int
+	newX, newY, err := calcNewImageDimensions(args[1], img)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
+	fmt.Printf("mosaic: new image size: %dx%d\n", newX, newY)
+	newImg := transform.Resize(img, newX, newY, transform.Linear)
+
+	if err := imgio.Save(`C:\Users\evert\new.png`, newImg, imgio.PNGEncoder()); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func calcNewImageDimensions(value string, img image.Image) (int, int, error) {
+	fmt.Printf("mosaic: value: %s\n", value)
 	fmt.Printf("mosaic: current image size: %dx%d\n", img.Bounds().Size().X, img.Bounds().Size().Y)
 
 	regexpPerc := regexp.MustCompile("^([0-9]+)%$")
@@ -45,32 +56,25 @@ func scaleRun(cmd *cobra.Command, args []string) {
 		fmt.Printf("mosaic: %s is a percentage value\n", value)
 		perc, err := strconv.Atoi(regexpPerc.FindStringSubmatch(value)[1])
 		if err != nil {
-			fmt.Println(err)
-			return
+			return 0, 0, err
 		}
 		fmt.Printf("mosaic: %d percent\n", perc)
-		newX, newY = calcNewImageDimensionsForPercentage(img, float32(perc)/100.0)
+		x, y := calcNewImageDimensionsForPercentage(img, float32(perc)/100.0)
+		return x, y, nil
 	} else if regexpDim.MatchString(value) {
-		newX, err = strconv.Atoi(regexpDim.FindStringSubmatch(value)[1])
+		x, err := strconv.Atoi(regexpDim.FindStringSubmatch(value)[1])
 		if err != nil {
 			fmt.Println(err)
-			return
+			return 0, 0, err
 		}
-		newY, err = strconv.Atoi(regexpDim.FindStringSubmatch(value)[2])
+		y, err := strconv.Atoi(regexpDim.FindStringSubmatch(value)[2])
 		if err != nil {
 			fmt.Println(err)
-			return
+			return 0, 0, err
 		}
+		return x, y, nil
 	} else {
-		fmt.Printf("mosaic: %s is not a recognized value\n", value)
-		return
-	}
-
-	fmt.Printf("mosaic: new image size: %dx%d\n", newX, newY)
-	newImg := transform.Resize(img, newX, newY, transform.Linear)
-
-	if err := imgio.Save(`C:\Users\evert\new.png`, newImg, imgio.PNGEncoder()); err != nil {
-		fmt.Println(err)
+		return 0, 0, fmt.Errorf("mosaic: %s is not a recognized percentage or dimension value", value)
 	}
 }
 
