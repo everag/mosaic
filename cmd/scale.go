@@ -6,14 +6,12 @@ package cmd
 import (
 	"fmt"
 	"image"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/anthonynsimon/bild/imgio"
 	"github.com/anthonynsimon/bild/transform"
+	files "github.com/everag/mosaic/util"
 	"github.com/spf13/cobra"
 )
 
@@ -30,27 +28,27 @@ func scaleRun(cmd *cobra.Command, args []string) {
 
 	img, err := imgio.Open(imgPath)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("error: %s", err)
 		return
 	}
 
 	newX, newY, transToken, err := calcNewImageDimensions(args[1], img)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("error: %s", err)
 		return
 	}
-
 	fmt.Printf("mosaic: new image size: %dx%d\n", newX, newY)
-	newImg := transform.Resize(img, newX, newY, transform.Linear)
-	newImgFilename, err := getNewImageFilename(imgPath, transToken)
-	if err != nil {
-		fmt.Println(err)
-	}
 
+	newImg := transform.Resize(img, newX, newY, transform.Linear)
+	newImgFilename, err := files.GetNewImageFilename(imgPath, transToken)
+	if err != nil {
+		fmt.Printf("error: %s", err)
+		return
+	}
 	fmt.Printf("mosaic: saving new image to %s", newImgFilename)
 
 	if err := imgio.Save(newImgFilename, newImg, imgio.PNGEncoder()); err != nil {
-		fmt.Println(err)
+		fmt.Printf("error: %s", err)
 	}
 }
 
@@ -73,17 +71,15 @@ func calcNewImageDimensions(value string, img image.Image) (int, int, string, er
 	} else if regexpDim.MatchString(value) {
 		x, err := strconv.Atoi(regexpDim.FindStringSubmatch(value)[1])
 		if err != nil {
-			fmt.Println(err)
 			return 0, 0, "", err
 		}
 		y, err := strconv.Atoi(regexpDim.FindStringSubmatch(value)[2])
 		if err != nil {
-			fmt.Println(err)
 			return 0, 0, "", err
 		}
 		return x, y, value, nil
 	} else {
-		return 0, 0, "", fmt.Errorf("mosaic: %s is not a recognized percentage or dimension value", value)
+		return 0, 0, "", fmt.Errorf("%s is not a percentage or dimension value", value)
 	}
 }
 
@@ -91,15 +87,6 @@ func calcNewImageDimensionsForPercentage(img image.Image, perc float32) (int, in
 	newX := int(float32(img.Bounds().Size().X) * perc)
 	newY := int(float32(img.Bounds().Size().Y) * perc)
 	return newX, newY
-}
-
-func getNewImageFilename(currImgFilename string, transToken string) (string, error) {
-	dir := filepath.Dir(currImgFilename)
-	ext := filepath.Ext(currImgFilename)
-	fileNameWithExt := filepath.Base(currImgFilename)
-	fileName := strings.TrimSuffix(fileNameWithExt, ext)
-
-	return dir + string(os.PathSeparator) + fileName + "_" + transToken + ext, nil
 }
 
 func init() {
