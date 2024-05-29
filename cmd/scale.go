@@ -6,8 +6,11 @@ package cmd
 import (
 	"fmt"
 	"image"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/anthonynsimon/bild/imgio"
 	"github.com/anthonynsimon/bild/transform"
@@ -31,7 +34,7 @@ func scaleRun(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	newX, newY, err := calcNewImageDimensions(args[1], img)
+	newX, newY, transToken, err := calcNewImageDimensions(args[1], img)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -39,13 +42,19 @@ func scaleRun(cmd *cobra.Command, args []string) {
 
 	fmt.Printf("mosaic: new image size: %dx%d\n", newX, newY)
 	newImg := transform.Resize(img, newX, newY, transform.Linear)
+	newImgFilename, err := getNewImageFilename(imgPath, transToken)
+	if err != nil {
+		fmt.Println(err)
+	}
 
-	if err := imgio.Save(`C:\Users\evert\new.png`, newImg, imgio.PNGEncoder()); err != nil {
+	fmt.Printf("mosaic: saving new image to %s", newImgFilename)
+
+	if err := imgio.Save(newImgFilename, newImg, imgio.PNGEncoder()); err != nil {
 		fmt.Println(err)
 	}
 }
 
-func calcNewImageDimensions(value string, img image.Image) (int, int, error) {
+func calcNewImageDimensions(value string, img image.Image) (int, int, string, error) {
 	fmt.Printf("mosaic: value: %s\n", value)
 	fmt.Printf("mosaic: current image size: %dx%d\n", img.Bounds().Size().X, img.Bounds().Size().Y)
 
@@ -56,25 +65,25 @@ func calcNewImageDimensions(value string, img image.Image) (int, int, error) {
 		fmt.Printf("mosaic: %s is a percentage value\n", value)
 		perc, err := strconv.Atoi(regexpPerc.FindStringSubmatch(value)[1])
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, "", err
 		}
 		fmt.Printf("mosaic: %d percent\n", perc)
 		x, y := calcNewImageDimensionsForPercentage(img, float32(perc)/100.0)
-		return x, y, nil
+		return x, y, fmt.Sprintf("%dpc", perc), nil
 	} else if regexpDim.MatchString(value) {
 		x, err := strconv.Atoi(regexpDim.FindStringSubmatch(value)[1])
 		if err != nil {
 			fmt.Println(err)
-			return 0, 0, err
+			return 0, 0, "", err
 		}
 		y, err := strconv.Atoi(regexpDim.FindStringSubmatch(value)[2])
 		if err != nil {
 			fmt.Println(err)
-			return 0, 0, err
+			return 0, 0, "", err
 		}
-		return x, y, nil
+		return x, y, value, nil
 	} else {
-		return 0, 0, fmt.Errorf("mosaic: %s is not a recognized percentage or dimension value", value)
+		return 0, 0, "", fmt.Errorf("mosaic: %s is not a recognized percentage or dimension value", value)
 	}
 }
 
@@ -82,6 +91,15 @@ func calcNewImageDimensionsForPercentage(img image.Image, perc float32) (int, in
 	newX := int(float32(img.Bounds().Size().X) * perc)
 	newY := int(float32(img.Bounds().Size().Y) * perc)
 	return newX, newY
+}
+
+func getNewImageFilename(currImgFilename string, transToken string) (string, error) {
+	dir := filepath.Dir(currImgFilename)
+	ext := filepath.Ext(currImgFilename)
+	fileNameWithExt := filepath.Base(currImgFilename)
+	fileName := strings.TrimSuffix(fileNameWithExt, ext)
+
+	return dir + string(os.PathSeparator) + fileName + "_" + transToken + ext, nil
 }
 
 func init() {
